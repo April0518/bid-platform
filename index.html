@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>招投标信息聚合平台</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  :root { --primary: #2563EB; --primary-fg: #fff; --muted: #f1f5f9; --muted-fg: #64748b; --bg: #f8fafc; --fg: #1e293b; --border: #e2e8f0; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--fg); margin: 0; }
+  .glass { background: rgba(255,255,255,0.8); backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.3); }
+  .card-hover { transition: all 0.2s ease; }
+  .card-hover:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  .fade-in { animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .nav-item { transition: all .15s ease; cursor: pointer; border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  .nav-item:hover { background: #e0e7ff; }
+  .nav-item.active { background: var(--primary); color: white; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  .line-clamp-1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+// === API ===
+const API = '/api';
+const api = {
+  get: async (p) => { const r = await fetch(API+p); return r.json(); },
+  post: async (p, b) => { const r = await fetch(API+p, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); },
+  del: async (p) => { const r = await fetch(API+p, {method:'DELETE'}); return r.json(); },
+};
+
+// === Icons ===
+const S = (d, s=20) => <svg xmlns="http://www.w3.org/2000/svg" width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><g dangerouslySetInnerHTML={{__html:d}}/></svg>;
+const ICON = {
+  dash:'<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>',
+  art:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+  rep:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+  set:'<circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>',
+  ft:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
+  cl:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  bc:'<line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/>',
+  ca:'<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  al:'<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>',
+  tr:'<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+  sr:'<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  add:'<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  sync:'<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
+};
+const CAT_COLORS = { '碳排放':'#059669','绿色制造':'#10b981','零碳园区':'#06b6d4','温室气体':'#8b5cf6','零碳工厂':'#f97316' };
+const TYPE_LABEL = { daily:'日报', weekly:'周报', monthly:'月报' };
+const TYPE_COLOR = { daily:'#3b82f6', weekly:'#10b981', monthly:'#f59e0b' };
+const NAV = [
+  { id:'dashboard', label:'数据看板', icon:ICON.dash },
+  { id:'articles', label:'招投标信息', icon:ICON.art },
+  { id:'reports', label:'汇总报告', icon:ICON.rep },
+  { id:'settings', label:'系统设置', icon:ICON.set },
+];
+
+// === Sidebar ===
+const Sidebar = ({ page, nav }) => (
+  <aside className="flex flex-col border-r bg-white" style={{width:'220px',minHeight:'100vh',padding:16}}>
+    <div className="flex items-center mb-8" style={{gap:10}}>
+      <div style={{width:36,height:36,background:'var(--primary)',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',color:'white',fontSize:18}}>{S(ICON.set, 16)}</div>
+      <div><div style={{fontSize:14,fontWeight:600}}>招投标平台</div><div style={{fontSize:11,color:'var(--muted-fg)'}}>信息聚合系统</div></div>
+    </div>
+    {NAV.map(item => (
+      <div key={item.id} onClick={() => nav(item.id)} className={`nav-item ${page===item.id?'active':''}`}>
+        {S(item.icon, 18)}<span style={{fontWeight:500}}>{item.label}</span>
+      </div>
+    ))}
+    <div style={{marginTop:'auto',borderTop:'1px solid var(--border)',paddingTop:12,textAlign:'center',fontSize:11,color:'var(--muted-fg)'}}>v1.0.0</div>
+  </aside>
+);
+
+// === Dashboard ===
+const Dashboard = () => {
+  const [stats, setStats] = useState(null);
+  const [trend, setTrend] = useState(null);
+  useEffect(() => { api.get('/stats/overview').then(r => r.status==='ok' && setStats(r.data)).catch(()=>{}); }, []);
+  useEffect(() => { api.get('/stats/trend').then(r => r.status==='ok' && setTrend(r.data)).catch(()=>{}); }, []);
+
+  const StatCard = ({l,v,c,ic}) => (
+    <div className="stat-card rounded-xl border bg-white p-5" style={{borderLeft:`4px solid ${c}`}}>
+      <div className="flex items-center justify-between">
+        <div><div style={{fontSize:14,color:'var(--muted-fg)'}}>{l}</div><div style={{fontSize:24,fontWeight:700,color:c,marginTop:4}}>{v??'-'}</div></div>
+        <div style={{width:48,height:48,borderRadius:'50%',background:`${c}15`,display:'flex',alignItems:'center',justifyContent:'center',color:c}}>{S(ic,22)}</div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="fade-in">
+      <div className="mb-6"><h1 style={{fontSize:24,fontWeight:700}}>数据看板</h1><p style={{fontSize:14,color:'var(--muted-fg)',marginTop:4}}>招投标信息概览与趋势分析</p></div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <StatCard l="文章总数" v={stats?.total} c="#2563EB" ic={ICON.ft}/>
+        <StatCard l="今日新增" v={stats?.todayCount} c="#3b82f6" ic={ICON.cl}/>
+        <StatCard l="本周新增" v={stats?.weekCount} c="#10b981" ic={ICON.bc}/>
+        <StatCard l="本月新增" v={stats?.monthCount} c="#f59e0b" ic={ICON.ca}/>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="rounded-xl border bg-white p-5">
+          <h3 style={{fontSize:16,fontWeight:600,marginBottom:16}}>月度趋势</h3>
+          {trend?.trend?.length ? (
+            <div className="flex items-end justify-between" style={{height:180,gap:8}}>
+              {trend.trend.map(t => { const m = Math.max(...trend.trend.map(x=>x.count),1); const h = (t.count/m)*100;
+                return <div key={t.month} className="flex flex-col items-center justify-end flex-1" style={{gap:4}}>
+                  <span style={{fontSize:11,color:'var(--muted-fg)'}}>{t.count}</span>
+                  <div style={{width:'100%',height:`${Math.max(h,4)}%`,background:'#2563EB',borderRadius:'2px 2px 0 0',opacity:0.7+(h/100)*0.3,minHeight:6}}/>
+                  <span style={{fontSize:10,color:'var(--muted-fg)'}}>{t.month.slice(5)}</span>
+                </div>;
+              })}
+            </div>
+          ) : <div className="py-12 text-center" style={{color:'var(--muted-fg)'}}>加载中...</div>}
+        </div>
+        <div className="rounded-xl border bg-white p-5">
+          <h3 style={{fontSize:16,fontWeight:600,marginBottom:16}}>类别分布</h3>
+          {stats?.categoryDistribution?.length ? stats.categoryDistribution.map(item => {
+            const mc = Math.max(...stats.categoryDistribution.map(c=>c.count),1);
+            return <div key={item.category} className="flex items-center mb-3" style={{gap:12}}>
+              <span style={{fontSize:13,width:70,textAlign:'right'}}>{item.category}</span>
+              <div className="flex-1 rounded-full overflow-hidden" style={{height:18,background:'#f1f5f9'}}>
+                <div style={{width:`${(item.count/mc)*100}%`,height:'100%',background:'#2563EB',borderRadius:'999px',opacity:0.6+(item.count/mc)*0.4}}/>
+              </div>
+              <span style={{fontSize:13,fontWeight:600,width:24,textAlign:'right'}}>{item.count}</span>
+            </div>;
+          }) : <div className="py-12 text-center" style={{color:'var(--muted-fg)'}}>加载中...</div>}
+        </div>
+        <div className="rounded-xl border bg-white p-5">
+          <h3 style={{fontSize:16,fontWeight:600,marginBottom:16}}>热门关键词</h3>
+          {trend?.topKeywords?.length ? (
+            <div className="flex flex-wrap" style={{gap:8}}>
+              {trend.topKeywords.slice(0,15).map((kw,i) => (
+                <span key={kw.word} style={{background:`rgba(37,99,235,${0.08+(1-i/15)*0.2})`,color:'#2563EB',padding:'6px 12px',borderRadius:'999px',fontSize:13,fontWeight:500}}>
+                  {kw.word}<span style={{marginLeft:4,opacity:0.6}}>({kw.count})</span>
+                </span>
+              ))}
+            </div>
+          ) : <div className="py-12 text-center" style={{color:'var(--muted-fg)'}}>加载中...</div>}
+        </div>
+        <div className="rounded-xl border bg-white p-5">
+          <h3 style={{fontSize:16,fontWeight:600,marginBottom:16}}>来源分布</h3>
+          {stats?.sourceDistribution?.length ? stats.sourceDistribution.map(item => {
+            const t = stats.sourceDistribution.reduce((s,c)=>s+c.count,0);
+            return <div key={item.source} className="flex items-center mb-3" style={{gap:12}}>
+              <span className="flex-1 truncate" style={{fontSize:13}}>{item.source}</span>
+              <span style={{fontSize:13,fontWeight:600}}>{item.count}</span>
+              <span style={{fontSize:11,color:'var(--muted-fg)'}}>({Math.round(item.count/t*100)}%)</span>
+            </div>;
+          }) : <div className="py-12 text-center" style={{color:'var(--muted-fg)'}}>加载中...</div>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// === Articles ===
+const Articles = ({ onArticle }) => {
+  const [page, setPage] = useState(1);
+  const [kw, setKw] = useState('');
+  const [skw, setSkw] = useState('');
+  const [cat, setCat] = useState('');
+  const [src, setSrc] = useState('');
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [cats, setCats] = useState([]);
+  const [srcs, setSrcs] = useState([]);
+
+  const fetchArticles = () => {
+    setLoading(true);
+    const p = new URLSearchParams({page, pageSize:8});
+    if(skw) p.set('keyword',skw);
+    if(cat) p.set('category',cat);
+    if(src) p.set('source',src);
+    api.get(`/articles?${p}`).then(r => { if(r.status==='ok') setData(r.data); setLoading(false); }).catch(()=>setLoading(false));
+  };
+
+  useEffect(() => { fetchArticles(); }, [page, skw, cat, src]);
+  useEffect(() => { api.get('/articles/filters/options').then(r => { if(r.status==='ok'){ setCats(r.data.categories); setSrcs(r.data.sources); } }).catch(()=>{}); }, []);
+
+  const handleDel = (id, title) => {
+    if(window.confirm(`确定删除「${title}」吗？`)) api.del(`/articles/${id}`).then(() => fetchArticles());
+  };
+
+  return (
+    <div className="fade-in">
+      <div className="mb-6"><h1 style={{fontSize:24,fontWeight:700}}>招投标信息</h1><p style={{fontSize:14,color:'var(--muted-fg)',marginTop:4}}>浏览和搜索已抓取的招投标公告</p></div>
+
+      <div className="glass rounded-xl p-4 mb-6 flex flex-wrap items-center" style={{gap:12}}>
+        <div style={{flex:1,minWidth:200,position:'relative'}}>
+          <input placeholder="搜索标题、关键词..." value={kw} onChange={e=>setKw(e.target.value)} onKeyDown={e=>e.key==='Enter'&&(setPage(1),setSkw(kw))} style={{width:'100%',padding:'8px 12px 8px 36px',border:'1px solid var(--border)',borderRadius:6,fontSize:14,outline:'none'}}/>
+          <div style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',color:'var(--muted-fg)'}}>{S(ICON.sr,16)}</div>
+        </div>
+        <select value={cat} onChange={e=>{setCat(e.target.value);setPage(1)}} style={{padding:'8px 12px',border:'1px solid var(--border)',borderRadius:6,fontSize:14,background:'white',minWidth:130}}>
+          <option value="">全部类别</option>
+          {cats.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={src} onChange={e=>{setSrc(e.target.value);setPage(1)}} style={{padding:'8px 12px',border:'1px solid var(--border)',borderRadius:6,fontSize:14,background:'white',minWidth:180}}>
+          <option value="">全部来源</option>
+          {srcs.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <button onClick={()=>{setPage(1);setSkw(kw)}} style={{padding:'8px 20px',background:'var(--primary)',color:'white',border:'none',borderRadius:6,cursor:'pointer',fontSize:14,fontWeight:500}}>搜索</button>
+        <button onClick={() => onArticle(null, true)} style={{padding:'8px 12px',border:'1px solid var(--border)',borderRadius:6,background:'white',cursor:'pointer',display:'flex',alignItems:'center',gap:4,fontSize:13}}>{S(ICON.add,14)}添加</button>
+      </div>
+
+      {loading ? <div className="py-20 text-center" style={{color:'var(--muted-fg)'}}>加载中...</div> : !data?.items?.length ? (
+        <div className="flex flex-col items-center py-20" style={{gap:12,color:'var(--muted-fg)'}}>{S(ICON.ft,48,{opacity:0.4})}<p>暂无招投标信息</p></div>
+      ) : (
+        <>
+          <div style={{display:'flex',flexDirection:'column',gap:12}}>
+            {data.items.map(a => (
+              <div key={a.id} className="card-hover glass rounded-xl p-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center flex-wrap" style={{gap:8}}>
+                      <span style={{background:`${CAT_COLORS[a.category]||'#94a3b8'}20`,color:CAT_COLORS[a.category]||'#64748b',padding:'2px 8px',borderRadius:4,fontSize:12,fontWeight:500}}>{a.category}</span>
+                      <span style={{fontSize:11,color:'var(--muted-fg)'}}>{a.publishDate}</span>
+                      <span style={{fontSize:11,color:'var(--muted-fg)'}}>{a.source}</span>
+                    </div>
+                    <div onClick={() => onArticle(a.id)} className="mt-1 font-semibold line-clamp-1 hover:text-blue-600" style={{fontSize:15,cursor:'pointer'}}>{a.title}</div>
+                    <div className="line-clamp-2 mt-1" style={{fontSize:13,color:'var(--muted-fg)'}}>{a.summary}</div>
+                    {a.keywords?.length > 0 && <div className="flex flex-wrap mt-2" style={{gap:4}}>{a.keywords.slice(0,3).map(k => <span key={k} style={{fontSize:11,background:'#f1f5f9',color:'#64748b',borderRadius:4,padding:'2px 8px'}}>{k}</span>)}</div>}
+                  </div>
+                  <div className="flex ml-3" style={{gap:4}}>
+                    <button onClick={() => onArticle(a.id)} style={{padding:'6px 12px',border:'1px solid var(--border)',borderRadius:6,background:'white',cursor:'pointer',fontSize:13}}>查看</button>
+                    <button onClick={() => handleDel(a.id, a.title)} style={{padding:6,background:'transparent',border:'none',cursor:'pointer',color:'#ef4444'}}>{S(ICON.tr,16)}</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-6 flex items-center justify-center" style={{gap:4}}>
+            <button onClick={()=>setPage(Math.max(1,page-1))} disabled={page<=1} style={{padding:'6px 12px',border:'1px solid var(--border)',borderRadius:6,background:'white',cursor:page<=1?'not-allowed':'pointer',opacity:page<=1?.5:1,fontSize:13}}>上一页</button>
+            {data.pagination && Array.from({length:Math.min(data.pagination.totalPages,8)},(_,i)=>i+1).map(p => (
+              <button key={p} onClick={()=>setPage(p)} style={{padding:'6px 12px',border:'1px solid var(--border)',borderRadius:6,minWidth:32,background:p===page?'var(--primary)':'white',color:p===page?'white':'inherit',cursor:'pointer',fontSize:13}}>{p}</button>
+            ))}
+            <button onClick={()=>setPage(Math.min(data.pagination.totalPages,page+1))} disabled={page>=data.pagination.totalPages} style={{padding:'6px 12px',border:'1px solid var(--border)',borderRadius:6,background:'white',cursor:page>=data.pagination.totalPages?'not-allowed':'pointer',opacity:page>=data.pagination.totalPages?.5:1,fontSize:13}}>下一页</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+// === Article Detail ===
+const ArticleDetail = ({ id, onBack }) => {
+  const [a, setA] = useState(null);
+  useEffect(() => { api.get(`/articles/${id}`).then(r => r.status==='ok' && setA(r.data)); }, [id]);
+  if (!a) return <div className="py-20 text-center" style={{color:'var(--muted-fg)'}}>加载中...</div>;
+  return (
+    <div className="fade-in" style={{maxWidth:900}}>
+      <button onClick={onBack} className="mb-4 flex items-center" style={{gap:4,padding:'6px 8px',background:'transparent',border:'none',cursor:'pointer',color:'var(--muted-fg)',fontSize:14}}>{S(ICON.al,16)}返回列表</button>
+      <div className="glass rounded-xl p-6 mb-6">
+        <div className="flex items-center flex-wrap" style={{gap:8}}>
+          <span style={{background:`${CAT_COLORS[a.category]||'#94a3b8'}20`,color:CAT_COLORS[a.category]||'#64748b',padding:'2px 8px',borderRadius:4,fontSize:12,fontWeight:500}}>{a.category}</span>
+          <span style={{fontSize:12,color:'var(--muted-fg)'}}>发布日期: {a.publishDate}</span>
+          <span style={{fontSize:12,color:'var(--muted-fg)'}}>来源: {a.source}</span>
+        </div>
+        <h1 style={{fontSize:22,fontWeight:700,marginTop:16}}>{a.title}</h1>
+        {a.keywords?.length > 0 && <div className="flex flex-wrap mt-3" style={{gap:4}}>{a.keywords.map(k => <span key={k} style={{fontSize:12,background:'#f1f5f9',color:'#64748b',borderRadius:4,padding:'2px 8px'}}>{k}</span>)}</div>}
+      </div>
+      <div className="glass rounded-xl p-6">
+        <div style={{fontSize:15,lineHeight:1.8,whiteSpace:'pre-wrap'}}>{a.content}</div>
+      </div>
+    </div>
+  );
+};
+
+// === Add Article Dialog ===
+const AddArticle = ({ onClose }) => {
+  const [form, setForm] = useState({title:'',source:'',publishDate:new Date().toISOString().split('T')[0],summary:'',content:'',category:'其他',keywords:''});
+  const [sub, setSub] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const handleSubmit = async () => {
+    if(!form.title.trim()) { setMsg('请输入标题'); return; }
+    setSub(true);
+    const r = await api.post('/articles', {...form, keywords: form.keywords.split(/[,，、\s]+/).filter(Boolean)});
+    if(r.status==='ok') { setMsg('添加成功！'); setTimeout(() => { onClose(); }, 1000); }
+    else setMsg('添加失败');
+    setSub(false);
+  };
+
+  return (
+    <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100}}>
+      <div className="glass rounded-xl" style={{width:600,maxHeight:'90vh',overflow:'auto',padding:24}}>
+        <div className="flex items-center justify-between mb-4"><h2 style={{fontSize:18,fontWeight:600}}>手动添加招投标信息</h2><button onClick={onClose} style={{background:'transparent',border:'none',cursor:'pointer',fontSize:20}}>x</button></div>
+        {msg && <div style={{padding:'8px 12px',background:msg.includes('成功')?'#dcfce7':'#fee2e2',borderRadius:6,marginBottom:12,fontSize:13}}>{msg}</div>}
+        <div className="flex flex-col" style={{gap:12}}>
+          <input placeholder="标题 *" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} style={{padding:'8px 12px',border:'1px solid var(--border)',borderRadius:6,fontSize:14}}/>
+          <div className="flex" style={{gap:12}}>
+            <input placeholder="来源" value={form.source} onChange={e=>setForm({...form,source:e.target.value})} style={{flex:1,padding:'8px 12px',border:'1px solid var(--border)',borderRadius:6,fontSize:14}}/>
+            <input type="date" value={form.publishDate} onChange={e=>setForm({...form,publishDate:e.target.value})} style={{padding:'8px 12px',border:'1px solid var(--border)',borderRadius:6,fontSize:14}}/>
+            <select value={form.category} onChange={e=>setForm({...form,category:e.target.value})} style={{padding:'8px 12px',border:'1px solid var(--border)',borderRadius:6,fontSize:14,background:'white'}}>
+              {['碳排放','绿色制造','零碳园区','温室气体','零碳工厂'].map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <input placeholder="关键词（用逗号分隔）" value={form.keywords} onChange={e=>setForm({...form,keywords:e.target.value})} style={{padding:'8px 12px',border:'1px solid var(--border)',borderRadius:6,fontSize:14}}/>
+          <textarea placeholder="摘要" rows={3} value={form.summary} onChange={e=>setForm({...form,summary:e.target.value})} style={{padding:'8px 12px',border:'1px solid var(--border)',borderRadius:6,fontSize:14,resize:'vertical'}}/>
+          <textarea placeholder="正文内容" rows={6} value={form.content} onChange={e=>setForm({...form,content:e.target.value})} style={{padding:'8px 12px',border:'1px solid var(--border)',borderRadius:6,fontSize:14,resize:'vertical'}}/>
+          <div className="flex justify-end" style={{gap:8}}>
+            <button onClick={onClose} style={{padding:'8px 20px',border:'1px solid var(--border)',borderRadius:6,background:'white',cursor:'pointer',fontSize:14}}>取消</button>
+            <button onClick={handleSubmit} disabled={sub} style={{padding:'8px 20px',background:'var(--primary)',color:'white',border:'none',borderRadius:6,cursor:sub?'not-allowed':'pointer',fontSize:14,fontWeight:500}}>{sub?'提交中...':'提交'}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// === Reports ===
+const Reports = () => {
+  const [tab, setTab] = useState('all');
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [genMsg, setGenMsg] = useState('');
+
+  const fetchReports = () => { setLoading(true); const p = tab==='all'?'':`?type=${tab}`; api.get(`/reports${p}`).then(r => { if(r.status==='ok') setItems(r.data.items); setLoading(false); }).catch(()=>setLoading(false)); };
+  useEffect(() => { fetchReports(); }, [tab]);
+
+  const handleGen = async (type) => {
+    setGenMsg(`正在生成${TYPE_LABEL[type]}...`);
+    const r = await api.post('/reports/generate', {type});
+    if(r.status==='ok') setGenMsg(`${TYPE_LABEL[type]}生成成功`);
+    else setGenMsg('生成失败');
+    setTimeout(() => setGenMsg(''), 2000);
+    fetchReports();
+  };
+
+  return (
+    <div className="fade-in">
+      <div className="mb-6"><h1 style={{fontSize:24,fontWeight:700}}>汇总报告</h1><p style={{fontSize:14,color:'var(--muted-fg)',marginTop:4}}>自动生成的招投标信息日报、周报和月报</p></div>
+      <div className="glass rounded-xl p-4 mb-6 flex flex-wrap items-center justify-between" style={{gap:12}}>
+        <div className="flex" style={{gap:4,background:'#f1f5f9',padding:4,borderRadius:8}}>
+          {[{v:'all',l:'全部'},{v:'daily',l:'日报'},{v:'weekly',l:'周报'},{v:'monthly',l:'月报'}].map(t => (
+            <button key={t.v} onClick={()=>setTab(t.v)} style={{padding:'6px 16px',fontSize:13,borderRadius:6,background:tab===t.v?'white':'transparent',color:tab===t.v?'var(--primary)':'var(--muted-fg)',border:'none',cursor:'pointer',fontWeight:500,boxShadow:tab===t.v?'0 1px 3px rgba(0,0,0,0.1)':'none'}}>{t.l}</button>
+          ))}
+        </div>
+        <div className="flex" style={{gap:4,alignItems:'center'}}>
+          {genMsg && <span style={{fontSize:12,color:'#10b981'}}>{genMsg}</span>}
+          <button onClick={()=>handleGen('daily')} style={{padding:'6px 12px',fontSize:13,border:'1px solid var(--border)',borderRadius:6,background:'white',cursor:'pointer'}}>生成日报</button>
+          <button onClick={()=>handleGen('weekly')} style={{padding:'6px 12px',fontSize:13,border:'1px solid var(--border)',borderRadius:6,background:'white',cursor:'pointer'}}>生成周报</button>
+          <button onClick={()=>handleGen('monthly')} style={{padding:'6px 12px',fontSize:13,border:'1px solid var(--border)',borderRadius:6,background:'white',cursor:'pointer'}}>生成月报</button>
+        </div>
+      </div>
+      {loading ? <div className="py-20 text-center" style={{color:'var(--muted-fg)'}}>加载中...</div> : !items?.length ? (
+        <div className="flex flex-col items-center py-20" style={{gap:12,color:'var(--muted-fg)'}}>{S(ICON.rep,48,{opacity:0.4})}<p>暂无报告，点击上方按钮生成</p></div>
+      ) : <div style={{display:'flex',flexDirection:'column',gap:16}}>{items.map(r => (
+        <div key={r.id} className="card-hover glass rounded-xl p-5">
+          <div className="flex items-center" style={{gap:8}}>
+            <span style={{background:`${TYPE_COLOR[r.type]}20`,color:TYPE_COLOR[r.type],padding:'2px 8px',borderRadius:4,fontSize:12,fontWeight:500}}>{TYPE_LABEL[r.type]}</span>
+            <span style={{fontSize:11,color:'var(--muted-fg)'}}>{r.periodStart} ~ {r.periodEnd}</span>
+          </div>
+          <h3 style={{fontSize:16,fontWeight:600,marginTop:8}}>{r.title}</h3>
+          <p className="line-clamp-2 mt-1" style={{fontSize:13,color:'var(--muted-fg)'}}>{r.summary}</p>
+          <div className="flex items-center mt-3" style={{gap:16}}>
+            <span style={{fontSize:12,color:'var(--muted-fg)'}}>收录 <strong>{r.articleCount}</strong> 条</span>
+            {r.keywords?.length > 0 && <div className="flex" style={{gap:4}}>{r.keywords.slice(0,3).map(k => <span key={k.word} style={{fontSize:11,background:'#f1f5f9',color:'#64748b',borderRadius:4,padding:'2px 8px'}}>{k.word}({k.count})</span>)}</div>}
+          </div>
+          {r.categoryStats?.length > 0 && <div className="mt-3 pt-3 border-t flex" style={{gap:8}}>{r.categoryStats.map(cs => <span key={cs.category} style={{fontSize:12,padding:'4px 10px',background:'#f1f5f9',borderRadius:'999px'}}>{cs.category}<span className="ml-1 font-medium">{cs.count}</span></span>)}</div>}
+        </div>
+      ))}</div>}
+    </div>
+  );
+};
+
+// === Settings ===
+const Settings = () => {
+  const [name, setName] = useState('中国政府采购网');
+  const [freq, setFreq] = useState('daily');
+  const [auto, setAuto] = useState(true);
+  const [notify, setNotify] = useState(true);
+  const [tip, setTip] = useState(false);
+  const [crawling, setCrawling] = useState(false);
+  const [crawlMsg, setCrawlMsg] = useState('');
+
+  const handleCrawl = async () => {
+    setCrawling(true); setCrawlMsg('正在抓取...');
+    const r = await api.post('/crawl', {url: 'http://www.ccgp.gov.cn/cggg/zbgg/index.htm'});
+    setCrawlMsg(r.message || r.note || '完成');
+    setCrawling(false);
+    setTimeout(() => setCrawlMsg(''), 4000);
+  };
+
+  return (
+    <div className="fade-in" style={{maxWidth:800}}>
+      <div className="mb-6"><h1 style={{fontSize:24,fontWeight:700}}>系统设置</h1><p style={{fontSize:14,color:'var(--muted-fg)',marginTop:4}}>配置抓取和报告生成规则</p></div>
+      <div style={{display:'flex',flexDirection:'column',gap:24}}>
+        <div className="glass rounded-xl p-6">
+          <h2 style={{fontSize:18,fontWeight:600,marginBottom:16}}>数据抓取</h2>
+          <div className="mb-4">
+            <label className="block mb-1" style={{fontSize:14}}>抓取来源网址</label>
+            <input value={name} onChange={e=>setName(e.target.value)} className="w-full rounded-md border" style={{padding:'8px 12px',borderColor:'var(--border)',fontSize:14,outline:'none'}}/>
+            <p style={{fontSize:12,color:'var(--muted-fg)',marginTop:4}}>按"碳足迹、温室气体、绿色工厂、零碳园区、零碳工厂"等关键词搜索</p>
+          </div>
+          <div className="mb-4"><label className="block mb-1" style={{fontSize:14}}>抓取频率</label>
+            <select value={freq} onChange={e=>setFreq(e.target.value)} style={{padding:'8px 12px',border:'1px solid var(--border)',borderRadius:6,fontSize:14,background:'white',width:'100%'}}>
+              <option value="hourly">每小时</option><option value="daily">每天一次</option><option value="custom">手动触发</option>
+            </select>
+          </div>
+          <div className="flex items-center justify-between">
+            <div><div style={{fontSize:14}}>立即抓取</div><p style={{fontSize:12,color:'var(--muted-fg)'}}>手动触发一次数据抓取</p></div>
+            <div className="flex items-center" style={{gap:8}}>
+              {crawlMsg && <span style={{fontSize:12,color:crawlMsg.includes('成功')?'#10b981':'var(--muted-fg)'}}>{crawlMsg}</span>}
+              <button onClick={handleCrawl} disabled={crawling} style={{padding:'8px 20px',background:'var(--primary)',color:'white',border:'none',borderRadius:6,cursor:crawling?'not-allowed':'pointer',fontSize:14,fontWeight:500}}>
+                {crawling ? '抓取中...' : <span style={{display:'flex',alignItems:'center',gap:4}}>{S(ICON.sync,14)}开始抓取</span>}
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="glass rounded-xl p-6">
+          <h2 style={{fontSize:18,fontWeight:600,marginBottom:16}}>报告设置</h2>
+          <div className="flex items-center justify-between">
+            <div><div style={{fontSize:14}}>自动生成报告</div><p style={{fontSize:12,color:'var(--muted-fg)'}}>每日/每周/每月自动生成汇总报告</p></div>
+            <button onClick={()=>setAuto(!auto)} className="rounded-full" style={{width:44,height:24,background:auto?'var(--primary)':'#cbd5e1',border:'none',cursor:'pointer',position:'relative'}}>
+              <div style={{width:20,height:20,background:'white',borderRadius:'50%',position:'absolute',top:2,left:auto?22:2,transition:'left .2s'}}/>
+            </button>
+          </div>
+        </div>
+        <div className="glass rounded-xl p-6">
+          <h2 style={{fontSize:18,fontWeight:600,marginBottom:16}}>通知设置</h2>
+          <div className="flex items-center justify-between">
+            <div><div style={{fontSize:14}}>新消息通知</div><p style={{fontSize:12,color:'var(--muted-fg)'}}>有新招投标信息时推送通知</p></div>
+            <button onClick={()=>setNotify(!notify)} className="rounded-full" style={{width:44,height:24,background:notify?'var(--primary)':'#cbd5e1',border:'none',cursor:'pointer',position:'relative'}}>
+              <div style={{width:20,height:20,background:'white',borderRadius:'50%',position:'absolute',top:2,left:notify?22:2,transition:'left .2s'}}/>
+            </button>
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <button onClick={()=>setTip(true)} style={{padding:'8px 20px',background:'var(--primary)',color:'white',border:'none',borderRadius:6,cursor:'pointer',fontSize:14,fontWeight:500}}>保存设置</button>
+          {tip && <span className="ml-3" style={{fontSize:13,color:'#10b981'}}>已保存</span>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// === App ===
+const App = () => {
+  const [page, setPage] = useState('dashboard');
+  const [articleId, setArticleId] = useState(null);
+  const [addOpen, setAddOpen] = useState(false);
+
+  return (
+    <div className="flex" style={{minHeight:'100vh',background:'var(--bg)'}}>
+      <Sidebar page={page} nav={(p) => { setPage(p); setArticleId(null); }} />
+      <main className="flex-1 overflow-auto">
+        <div className="container" style={{padding:'24px 24px'}}>
+          {page === 'dashboard' && <Dashboard />}
+          {page === 'articles' && (articleId ? <ArticleDetail id={articleId} onBack={() => setArticleId(null)} /> : <Articles onArticle={(id, isAdd) => isAdd ? setAddOpen(true) : setArticleId(id)} />)}
+          {page === 'reports' && <Reports />}
+          {page === 'settings' && <Settings />}
+        </div>
+      </main>
+      {addOpen && <AddArticle onClose={() => setAddOpen(false)} />}
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

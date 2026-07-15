@@ -1,0 +1,12 @@
+{
+  "name": "bid-platform",
+  "version": "1.0.0",
+  "description": "招投标信息聚合平台 - Vercel Serverless",
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "node-fetch": "^2.7.0"
+  }
+}
